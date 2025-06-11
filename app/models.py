@@ -2,13 +2,28 @@ from sqlalchemy import Column, Integer, String, Numeric, Date, ForeignKey
 from sqlalchemy.orm import relationship
 from db import Base
 
+class Fornecedor(Base):
+    __tablename__ = "fornecedores"
+
+    id = Column(Integer, primary_key=True, index=True)
+    nome = Column(String, nullable=False)
+    cnpj = Column(String(20), nullable=False, unique=True)
+    email = Column(String, nullable=True)
+    telefone = Column(String, nullable=True)
+    segmento = Column(String, nullable=True)
+
+    produtos = relationship("Produto", back_populates="fornecedor")
+
 class Produto(Base):
     __tablename__ = "produtos"
 
     id = Column(Integer, primary_key=True, index=True)
     nome = Column(String, nullable=False)
     estoque_atual = Column(Integer, default=0)
-    preco = Column(Numeric(10,2), nullable=False)
+    preco = Column(Numeric(10, 2), nullable=False)
+
+    fornecedor_id = Column(Integer, ForeignKey("fornecedores.id"), nullable=True)
+    fornecedor = relationship("Fornecedor", back_populates="produtos")
 
     vendas = relationship("Venda", back_populates="produto")
     pedidos = relationship("Pedido", back_populates="produto")
