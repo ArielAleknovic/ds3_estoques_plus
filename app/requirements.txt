@@ -1,4 +1,7 @@
 streamlit
 psycopg2-binary
-sqlalchemy
+SQLAlchemy>=1.4
 pandas
+matplotlib
+streamlit-authenticator
+bcrypt
