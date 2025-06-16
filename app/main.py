@@ -1,21 +1,29 @@
 import streamlit as st
+st.set_page_config(page_title="Sistema de Monitoramento de Estoques", layout="wide")
+
+import matplotlib.pyplot as plt
+import pandas as pd
+
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-import pandas as pd
 from datetime import date, timedelta
-import matplotlib.pyplot as plt
-
 from db import SessionLocal, engine, Base
-from models import Produto, Venda, Pedido, Fornecedor 
+from models import Produto, Venda, Pedido, Fornecedor, Usuario
+from auth import *
 from services import *
+from utils import (
+    validar_nome,
+    validar_quantidade,
+    validar_valor_monetario,
+    validar_cnpj,
+    validar_email,
+    validar_telefone
+)
 
 Base.metadata.create_all(bind=engine)
 
-
-def main():
-    st.set_page_config(page_title="Sistema de Monitoramento de Estoques", layout="wide")
-
-    # Esconder barra superior
+#pagina de login 
+def login_page():
     st.markdown(
         """
         <style>
@@ -24,7 +32,68 @@ def main():
         """,
         unsafe_allow_html=True
     )
+    col1, col2, col3 = st.columns([1, 2, 1])  # proporções
+    
+    with col2:  # Centralizar o formulário
+        st.title("Sistema de Estoque Plus")
+        with st.form("login_form"):
+            st.subheader("Login")
+            username = st.text_input("Usuário")
+            password = st.text_input("Senha", type="password")
+            submitted = st.form_submit_button("Entrar")
 
+            if submitted:
+                usuario = autenticar_usuario(username, password)
+                if usuario:
+                    st.session_state.usuario = usuario
+                    st.success(f"Bem-vindo, {usuario.name}!")
+                    st.rerun()
+                else:
+                    st.error("Usuário ou senha incorretos.")
+
+        st.markdown("---")
+
+        with st.form("cadastro_form"):
+            st.subheader("Cadastrar novo usuário")
+            new_username = st.text_input("Usuário para cadastro")
+            new_name = st.text_input("Nome completo")
+            new_password = st.text_input("Senha", type="password")
+            confirm_password = st.text_input("Confirme a senha", type="password")
+            cadastrar = st.form_submit_button("Cadastrar")
+
+            if cadastrar:
+                if new_password != confirm_password:
+                    st.error("As senhas não conferem.")
+                else:
+                    sucesso = criar_usuario(new_username, new_name, new_password)
+                    if sucesso:
+                        st.success("Usuário cadastrado com sucesso!")
+                    else:
+                        st.warning("Usuário já existe.")
+
+#aplicação
+def main():
+    if "usuario" not in st.session_state:
+        st.session_state.usuario = None
+
+    usuario = st.session_state.usuario
+
+    if not usuario:
+        login_page()
+        return
+
+    st.sidebar.write(f"Usuário logado: {usuario.name}")
+
+
+    st.markdown(
+        """
+        <style>
+        header {visibility: hidden;}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+#tela de fundo
     st.markdown(
     """
     <style>
@@ -44,12 +113,17 @@ def main():
     unsafe_allow_html=True
     )
 
+#navegação
     with SessionLocal() as db:
-        menu = st.sidebar.radio("Navegação", ["Home", "Dashboard", "Pedidos", "Criar Pedido", "Relatórios", "Fornecedores"])
+        menu = st.sidebar.radio("Navegação", ["Home", "Dashboard", "Pedidos", "Criar Pedido", "Relatórios", "Criar Fornecedor", "Fornecedores", "Criar Produtos", "Produtos"])
 
         if menu == "Home":
             st.title("Bem-vindo ao Sistema de Monitoramento de Estoques")
             st.markdown("Este sistema permite acompanhar estoques, vendas, pedidos e fornecedores de forma simples e eficiente.")
+
+            if st.button("Logout"):
+                st.session_state.usuario = None
+                st.rerun()  # força atualização da página para voltar ao login
 
         elif menu == "Dashboard":
             st.subheader("Visão Geral dos Estoques e Recomendações de Pedido")
@@ -145,12 +219,20 @@ def main():
                     status_options = ["pendente", "enviado", "cancelado"]
                     index = status_options.index(pedido.status) if pedido.status in status_options else 0
                     status = st.selectbox("Status", status_options, index=index)
+
                     if st.button("Atualizar pedido"):
-                        atualizar_pedido(db, pedido_id, quantidade, status)
-                        st.success("Pedido atualizado com sucesso.")
+                        valido, erro = validar_quantidade(quantidade)
+                        if not valido:
+                            st.error(f"Erro na quantidade: {erro}")
+                        else:
+                            atualizar_pedido(db, pedido_id, int(quantidade), status)
+                            st.success("Pedido atualizado com sucesso.")
+                            st.rerun()
+
                     if st.button("Excluir pedido"):
                         deletar_pedido(db, pedido_id)
                         st.success("Pedido excluído com sucesso.")
+                        st.rerun()
                 else:
                     st.info("Pedido não encontrado.")
             else:
@@ -181,8 +263,13 @@ def main():
                 st.write(f"Quantidade sugerida para repor estoque para 30 dias: {sugestao} unidades.")
 
                 if st.button("Criar pedido"):
-                    criar_pedido(db, produto_obj.id, fornecedor_obj.id, quantidade)
-                    st.success("Pedido criado com sucesso.")
+                    valido, erro = validar_quantidade(quantidade)
+                    if not valido:
+                        st.error(f"Erro na quantidade: {erro}")
+                    else:
+                        criar_pedido(db, produto_obj.id, fornecedor_obj.id, int(quantidade))
+                        st.success("Pedido criado com sucesso.")
+                        st.rerun()
 
         elif menu == "Relatórios":
             st.subheader("Relatórios Resumidos")
@@ -194,6 +281,53 @@ def main():
             st.markdown(f"- Total de vendas nos últimos 30 dias: {total_vendas_30d} unidades")
             st.markdown(f"- Total de pedidos realizados: {total_pedidos}")
 
+        elif menu == "Criar Fornecedor":
+            st.subheader("Gestão de fornecedores")
+
+            fornecedores = get_fornecedores(db)
+            if fornecedores:
+                df_fornecedores = pd.DataFrame([{
+                    "ID": f.id,
+                    "Nome": f.nome,
+                    "CNPJ": f.cnpj,
+                    "Email": f.email,
+                    "Telefone": f.telefone,
+                    "Segmento": f.segmento
+                } for f in fornecedores])
+                st.dataframe(df_fornecedores, use_container_width=True)
+            else:
+                st.info("Nenhum fornecedor cadastrado.")
+
+            with st.form("form_fornecedor"):
+                nome = st.text_input("Nome")
+                cnpj = st.text_input("CNPJ")
+                email = st.text_input("Email")
+                telefone = st.text_input("Telefone")
+                segmento = st.text_input("Segmento")
+
+                submitted = st.form_submit_button("Adicionar fornecedor")
+                if submitted:
+                    erros = []
+
+                    validacoes = {
+                        "Nome": validar_nome(nome),
+                        "CNPJ": validar_cnpj(cnpj),
+                        "Email": validar_email(email) if email else (True, None),
+                        "Telefone": validar_telefone(telefone) if telefone else (True, None),
+                    }
+
+                    for campo, (valido, msg) in validacoes.items():
+                        if not valido:
+                            erros.append(f"{campo}: {msg}")
+
+                    if erros:
+                        for erro in erros:
+                            st.error(erro)
+                    else:
+                        criar_fornecedor(db, nome, cnpj, email, telefone, segmento)
+                        st.success(f"Fornecedor '{nome}' criado com sucesso.")
+                        st.rerun()
+        
         elif menu == "Fornecedores":
             st.subheader("Gestão de fornecedores")
 
@@ -211,22 +345,108 @@ def main():
             else:
                 st.info("Nenhum fornecedor cadastrado.")
 
-            st.markdown("Adicionar novo fornecedor")
-            with st.form("form_fornecedor"):
-                nome = st.text_input("Nome")
-                cnpj = st.text_input("CNPJ")
-                email = st.text_input("Email")
-                telefone = st.text_input("Telefone")
-                segmento = st.text_input("Segmento")
+            fornecedor_id = st.number_input("Informe o ID do fornecedor", min_value=1, step=1)
+            fornecedor = db.query(Fornecedor).filter(Fornecedor.id == fornecedor_id).first()
 
-                submitted = st.form_submit_button("Adicionar fornecedor")
-                if submitted:
-                    if not nome or not cnpj:
-                        st.error("Nome e CNPJ são obrigatórios.")
+            if fornecedor:
+                nome_edit = st.text_input("Nome", value=fornecedor.nome, key="edit_nome")
+                cnpj_edit = st.text_input("CNPJ", value=fornecedor.cnpj, key="edit_cnpj")
+                email_edit = st.text_input("Email", value=fornecedor.email, key="edit_email")
+                telefone_edit = st.text_input("Telefone", value=fornecedor.telefone, key="edit_telefone")
+                segmento_edit = st.text_input("Segmento", value=fornecedor.segmento, key="edit_segmento")
+
+                if st.button("Atualizar fornecedor"):
+                    erros = []
+
+                    validacoes = {
+                        "Nome": validar_nome(nome_edit),
+                        "CNPJ": validar_cnpj(cnpj_edit),
+                        "Email": validar_email(email_edit) if email_edit else (True, None),
+                        "Telefone": validar_telefone(telefone_edit) if telefone_edit else (True, None),
+                    }
+
+                    for campo, (valido, msg) in validacoes.items():
+                        if not valido:
+                            erros.append(f"{campo}: {msg}")
+
+                    if erros:
+                        for erro in erros:
+                            st.error(erro)
                     else:
-                        criar_fornecedor(db, nome, cnpj, email, telefone, segmento)
-                        st.success(f"Fornecedor '{nome}' criado com sucesso.")
-                        st.experimental_rerun()
+                        try:
+                            atualizar_fornecedor(db, fornecedor_id, nome_edit, cnpj_edit, email_edit, telefone_edit, segmento_edit)
+                            st.success("Fornecedor atualizado com sucesso.")
+                            st.rerun()
+                        except ValueError as e:
+                            st.error(f"Erro ao atualizar: {e}")
+
+                if st.button("Excluir fornecedor"):
+                    deletar_fornecedor(db, fornecedor_id)
+                    st.success("Fornecedor excluído com sucesso.")
+                    st.rerun()
+            else:
+                st.info("Fornecedor não encontrado.")
+        
+        elif menu == "Produtos":
+            st.subheader("Gestão de Produtos")
+
+            produtos = get_produtos(db)
+            if produtos:
+                df_produtos = pd.DataFrame([{
+                    "ID": p.id,
+                    "Nome": p.nome,
+                    "Estoque Atual": p.estoque_atual,
+                    "Preço (R$)": float(p.preco)
+                } for p in produtos])
+                st.dataframe(df_produtos, use_container_width=True)
+            else:
+                st.info("Nenhum produto cadastrado.")
+
+            produto_id = st.number_input("Informe o ID do produto", min_value=1, step=1)
+            produto = db.query(Produto).filter(Produto.id == produto_id).first()
+
+            if produto:
+                nome_edit = st.text_input("Nome", value=produto.nome, key="edit_nome_prod")
+                estoque_edit = st.number_input("Estoque", value=produto.estoque_atual, key="edit_estoque_prod")
+                preco_edit = st.number_input("Preço", value=float(produto.preco), format="%.2f", key="edit_preco_prod")                
+                if st.button("Atualizar produto"):
+                    atualizar_produto(db, produto_id, nome_edit, estoque_edit, preco_edit)
+                    st.success("Produto atualizado com sucesso.")
+                    st.rerun()
+            
+                if st.button("Excluir produto"):
+                    deletar_produto(db, produto_id)
+                    st.success("Produto excluído com sucesso.")
+                    st.rerun()
+            else:
+                st.info("Produto não encontrado.")
+
+        elif menu == "Criar Produtos":
+            st.subheader("Adicionar novo produto")
+            with st.form("form_produto"):
+                nome_prod = st.text_input("Nome do Produto")
+                estoque = st.number_input("Estoque Inicial", min_value=0, value=0)
+                preco = st.number_input("Preço", min_value=0.0, value=0.0, format="%.2f")
+
+                submitted = st.form_submit_button("Adicionar produto")
+                if submitted:
+                    if not nome_prod:
+                        st.error("O nome do produto é obrigatório.")
+                    else:
+                        criar_produto(db, nome_prod, estoque, preco)
+                        st.success(f"Produto '{nome_prod}' adicionado com sucesso.")
+                        st.rerun()
+        
+        elif menu == "Cadastrar Usuário":
+            st.subheader("Novo Usuário")
+            with st.form("form_cadastro"):
+                nome = st.text_input("Nome")
+                email = st.text_input("Email")
+                senha = st.text_input("Senha", type="password")
+                if st.form_submit_button("Cadastrar"):
+                    db = SessionLocal()
+                    criar_usuario(db, nome, email, senha)
+                    st.success("Usuário criado com sucesso!")
 
 if __name__ == "__main__":
     main()
