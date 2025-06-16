@@ -1,0 +1,26 @@
+
+services:
+  db:
+    image: postgres:15
+    restart: always
+    environment:
+      POSTGRES_USER: user
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: stockdb
+    volumes:
+      - db_data:/var/lib/postgresql/data
+      - ./app/init_db.sql:/docker-entrypoint-initdb.d/init_db.sql:ro
+    ports:
+      - "5432:5432"
+
+  app:
+    build: ./app
+    ports:
+      - "8501:8501"
+    environment:
+      - DATABASE_URL=postgresql://user:password@db:5432/stockdb
+    depends_on:
+      - db
+
+volumes:
+  db_data:
