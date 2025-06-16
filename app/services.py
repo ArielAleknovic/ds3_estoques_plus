@@ -6,7 +6,6 @@ from datetime import date, timedelta
 import matplotlib.pyplot as plt
 
 from db import SessionLocal, engine, Base
-<<<<<<< HEAD
 from models import Produto, Venda, Pedido, Fornecedor, Usuario
 from utils import normalizar_cnpj, validar_cnpj, normalizar_email, validar_email, validar_telefone
 from passlib.context import CryptContext
@@ -45,18 +44,11 @@ def deletar_produto(db: Session, produto_id: int):
     else:
         raise ValueError("Produto não encontrado.")
 
-=======
-from models import Produto, Venda, Pedido, Fornecedor 
-
-Base.metadata.create_all(bind=engine)
-
->>>>>>> 72ab3168a3a45a0ad319296886bd4d9704006cd9
 # CRUD Fornecedor (sem alterações)
 def get_fornecedores(db: Session):
     return db.query(Fornecedor).all()
 
 def criar_fornecedor(db: Session, nome, cnpj, email, telefone, segmento):
-<<<<<<< HEAD
     #validação sem rejects
     if not validar_cnpj(cnpj):
         raise ValueError("CNPJ inválido") 
@@ -66,16 +58,12 @@ def criar_fornecedor(db: Session, nome, cnpj, email, telefone, segmento):
         raise ValueError("Telefone inválido")
 
     fornecedor = Fornecedor(nome=nome, cnpj=normalizar_cnpj(cnpj), email=normalizar_email(email), telefone=telefone, segmento=segmento)
-=======
-    fornecedor = Fornecedor(nome=nome, cnpj=cnpj, email=email, telefone=telefone, segmento=segmento)
->>>>>>> 72ab3168a3a45a0ad319296886bd4d9704006cd9
     db.add(fornecedor)
     db.commit()
     db.refresh(fornecedor)
     return fornecedor
 
 def atualizar_fornecedor(db: Session, fornecedor_id, nome, cnpj, email, telefone, segmento):
-<<<<<<< HEAD
         #validação sem rejects
     if not validar_cnpj(cnpj):
         raise ValueError("CNPJ inválido") 
@@ -88,13 +76,6 @@ def atualizar_fornecedor(db: Session, fornecedor_id, nome, cnpj, email, telefone
         fornecedor.nome = nome
         fornecedor.cnpj = normalizar_cnpj(cnpj)
         fornecedor.email = normalizar_email(email)
-=======
-    fornecedor = db.query(Fornecedor).filter(Fornecedor.id == fornecedor_id).first()
-    if fornecedor:
-        fornecedor.nome = nome
-        fornecedor.cnpj = cnpj
-        fornecedor.email = email
->>>>>>> 72ab3168a3a45a0ad319296886bd4d9704006cd9
         fornecedor.telefone = telefone
         fornecedor.segmento = segmento
         db.commit()
@@ -110,12 +91,6 @@ def deletar_fornecedor(db: Session, fornecedor_id):
     return False
 
 # CRUD Produto, Venda e Pedido
-<<<<<<< HEAD
-=======
-def get_produtos(db: Session):
-    return db.query(Produto).all()
-
->>>>>>> 72ab3168a3a45a0ad319296886bd4d9704006cd9
 def get_pedidos(db: Session):
     return db.query(Pedido).all()
 
@@ -131,10 +106,6 @@ def calcular_media_vendas(db: Session, produto_id: int):
     ).scalar() or 0
     return soma_vendas / 30  # média diária
 
-<<<<<<< HEAD
-
-=======
->>>>>>> 72ab3168a3a45a0ad319296886bd4d9704006cd9
 def criar_pedido(db: Session, produto_id: int, fornecedor_id: int, quantidade: int):
     pedido = Pedido(
         produto_id=produto_id, 
@@ -165,12 +136,7 @@ def deletar_pedido(db: Session, pedido_id: int):
         return True
     return False
 
-<<<<<<< HEAD
 #CRUD  de login
-=======
-
-
->>>>>>> 72ab3168a3a45a0ad319296886bd4d9704006cd9
 def login_tela():
     credentials = get_credentials()
     authenticator = stauth.Authenticate(
@@ -200,7 +166,6 @@ def cadastro_tela():
             st.error("Preencha todos os campos.")
 
 def reset_tela():
-<<<<<<< HEAD
     
     st.subheader("Resetar senha")
     st.warning("Entre em contato com o administrador ou recrie o usuário.")
@@ -220,7 +185,3 @@ def autenticar_usuario(username: str, password: str):
     with SessionLocal() as db:
         usuario = db.query(Usuario).filter_by(username=username, password=password).first()
         return usuario
-=======
-    st.subheader("Resetar senha")
-    st.warning("Entre em contato com o administrador ou recrie o usuário.")
->>>>>>> 72ab3168a3a45a0ad319296886bd4d9704006cd9

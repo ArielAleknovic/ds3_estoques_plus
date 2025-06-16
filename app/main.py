@@ -9,49 +9,67 @@ from sqlalchemy import func
 from datetime import date, timedelta
 from db import SessionLocal, engine, Base
 from models import Produto, Venda, Pedido, Fornecedor, Usuario
-from auth import autenticar_usuario, criar_usuario
+from auth import *
 from services import *
-
-
+from utils import (
+    validar_nome,
+    validar_quantidade,
+    validar_valor_monetario,
+    validar_cnpj,
+    validar_email,
+    validar_telefone
+)
 
 Base.metadata.create_all(bind=engine)
 
 #pagina de login 
 def login_page():
-    st.title("Login")
+    st.markdown(
+        """
+        <style>
+        header {visibility: hidden;}
+        </style>
+        """,
+        unsafe_allow_html=True
+    )
+    col1, col2, col3 = st.columns([1, 2, 1])  # proporções
+    
+    with col2:  # Centralizar o formulário
+        st.title("Sistema de Estoque Plus")
+        with st.form("login_form"):
+            st.subheader("Login")
+            username = st.text_input("Usuário")
+            password = st.text_input("Senha", type="password")
+            submitted = st.form_submit_button("Entrar")
 
-    with st.form("login_form"):
-        username = st.text_input("Usuário")
-        password = st.text_input("Senha", type="password")
-        submitted = st.form_submit_button("Entrar")
-
-        if submitted:
-            usuario = autenticar_usuario(username, password)
-            if usuario:
-                st.session_state.usuario = usuario
-                st.success(f"Bem-vindo, {usuario.name}!")
-                st.rerun()
-            else:
-                st.error("Usuário ou senha incorretos.")
-
-    st.markdown("---")
-    with st.form("cadastro_form"):
-        st.subheader("Cadastrar novo usuário")
-        new_username = st.text_input("Usuário para cadastro")
-        new_name = st.text_input("Nome completo")
-        new_password = st.text_input("Senha", type="password")
-        confirm_password = st.text_input("Confirme a senha", type="password")
-        cadastrar = st.form_submit_button("Cadastrar")
-
-        if cadastrar:
-            if new_password != confirm_password:
-                st.error("As senhas não conferem.")
-            else:
-                sucesso = criar_usuario(new_username, new_name, new_password)
-                if sucesso:
-                    st.success("Usuário cadastrado com sucesso!")
+            if submitted:
+                usuario = autenticar_usuario(username, password)
+                if usuario:
+                    st.session_state.usuario = usuario
+                    st.success(f"Bem-vindo, {usuario.name}!")
+                    st.rerun()
                 else:
-                    st.warning("Usuário já existe.")
+                    st.error("Usuário ou senha incorretos.")
+
+        st.markdown("---")
+
+        with st.form("cadastro_form"):
+            st.subheader("Cadastrar novo usuário")
+            new_username = st.text_input("Usuário para cadastro")
+            new_name = st.text_input("Nome completo")
+            new_password = st.text_input("Senha", type="password")
+            confirm_password = st.text_input("Confirme a senha", type="password")
+            cadastrar = st.form_submit_button("Cadastrar")
+
+            if cadastrar:
+                if new_password != confirm_password:
+                    st.error("As senhas não conferem.")
+                else:
+                    sucesso = criar_usuario(new_username, new_name, new_password)
+                    if sucesso:
+                        st.success("Usuário cadastrado com sucesso!")
+                    else:
+                        st.warning("Usuário já existe.")
 
 #aplicação
 def main():
@@ -201,12 +219,20 @@ def main():
                     status_options = ["pendente", "enviado", "cancelado"]
                     index = status_options.index(pedido.status) if pedido.status in status_options else 0
                     status = st.selectbox("Status", status_options, index=index)
+
                     if st.button("Atualizar pedido"):
-                        atualizar_pedido(db, pedido_id, quantidade, status)
-                        st.success("Pedido atualizado com sucesso.")
+                        valido, erro = validar_quantidade(quantidade)
+                        if not valido:
+                            st.error(f"Erro na quantidade: {erro}")
+                        else:
+                            atualizar_pedido(db, pedido_id, int(quantidade), status)
+                            st.success("Pedido atualizado com sucesso.")
+                            st.rerun()
+
                     if st.button("Excluir pedido"):
                         deletar_pedido(db, pedido_id)
                         st.success("Pedido excluído com sucesso.")
+                        st.rerun()
                 else:
                     st.info("Pedido não encontrado.")
             else:
@@ -237,8 +263,13 @@ def main():
                 st.write(f"Quantidade sugerida para repor estoque para 30 dias: {sugestao} unidades.")
 
                 if st.button("Criar pedido"):
-                    criar_pedido(db, produto_obj.id, fornecedor_obj.id, quantidade)
-                    st.success("Pedido criado com sucesso.")
+                    valido, erro = validar_quantidade(quantidade)
+                    if not valido:
+                        st.error(f"Erro na quantidade: {erro}")
+                    else:
+                        criar_pedido(db, produto_obj.id, fornecedor_obj.id, int(quantidade))
+                        st.success("Pedido criado com sucesso.")
+                        st.rerun()
 
         elif menu == "Relatórios":
             st.subheader("Relatórios Resumidos")
@@ -276,8 +307,22 @@ def main():
 
                 submitted = st.form_submit_button("Adicionar fornecedor")
                 if submitted:
-                    if not nome or not cnpj:
-                        st.error("Nome e CNPJ são obrigatórios.")
+                    erros = []
+
+                    validacoes = {
+                        "Nome": validar_nome(nome),
+                        "CNPJ": validar_cnpj(cnpj),
+                        "Email": validar_email(email) if email else (True, None),
+                        "Telefone": validar_telefone(telefone) if telefone else (True, None),
+                    }
+
+                    for campo, (valido, msg) in validacoes.items():
+                        if not valido:
+                            erros.append(f"{campo}: {msg}")
+
+                    if erros:
+                        for erro in erros:
+                            st.error(erro)
                     else:
                         criar_fornecedor(db, nome, cnpj, email, telefone, segmento)
                         st.success(f"Fornecedor '{nome}' criado com sucesso.")
@@ -311,12 +356,29 @@ def main():
                 segmento_edit = st.text_input("Segmento", value=fornecedor.segmento, key="edit_segmento")
 
                 if st.button("Atualizar fornecedor"):
-                    try:
-                        atualizar_fornecedor(db, fornecedor_id, nome_edit, cnpj_edit, email_edit, telefone_edit, segmento_edit)
-                        st.success("Fornecedor atualizado com sucesso.")
-                        st.rerun()
-                    except ValueError as e:
-                        st.error(f"Erro ao atualizar: {e}")
+                    erros = []
+
+                    validacoes = {
+                        "Nome": validar_nome(nome_edit),
+                        "CNPJ": validar_cnpj(cnpj_edit),
+                        "Email": validar_email(email_edit) if email_edit else (True, None),
+                        "Telefone": validar_telefone(telefone_edit) if telefone_edit else (True, None),
+                    }
+
+                    for campo, (valido, msg) in validacoes.items():
+                        if not valido:
+                            erros.append(f"{campo}: {msg}")
+
+                    if erros:
+                        for erro in erros:
+                            st.error(erro)
+                    else:
+                        try:
+                            atualizar_fornecedor(db, fornecedor_id, nome_edit, cnpj_edit, email_edit, telefone_edit, segmento_edit)
+                            st.success("Fornecedor atualizado com sucesso.")
+                            st.rerun()
+                        except ValueError as e:
+                            st.error(f"Erro ao atualizar: {e}")
 
                 if st.button("Excluir fornecedor"):
                     deletar_fornecedor(db, fornecedor_id)
@@ -350,7 +412,7 @@ def main():
                 if st.button("Atualizar produto"):
                     atualizar_produto(db, produto_id, nome_edit, estoque_edit, preco_edit)
                     st.success("Produto atualizado com sucesso.")
-                    st.experimental_rerun()
+                    st.rerun()
             
                 if st.button("Excluir produto"):
                     deletar_produto(db, produto_id)
