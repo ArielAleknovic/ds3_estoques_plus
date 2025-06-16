@@ -1,3 +1,7 @@
+<<<<<<< HEAD
+=======
+version: "3.8"
+>>>>>>> 72ab3168a3a45a0ad319296886bd4d9704006cd9
 
 services:
   db:

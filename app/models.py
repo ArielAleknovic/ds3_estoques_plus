@@ -43,6 +43,10 @@ class Pedido(Base):
     produto = relationship("Produto", back_populates="pedidos")      
     fornecedor = relationship("Fornecedor", back_populates="pedidos")  
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 72ab3168a3a45a0ad319296886bd4d9704006cd9
 class Venda(Base):
     __tablename__ = "vendas"
 
@@ -51,6 +55,7 @@ class Venda(Base):
     quantidade = Column(Integer, nullable=False)
     data_venda = Column(Date, nullable=False)
 
+<<<<<<< HEAD
     produto = relationship("Produto", back_populates="vendas")
 
 class Usuario(Base):
@@ -59,3 +64,6 @@ class Usuario(Base):
     username = Column(String, primary_key=True)
     name = Column(String, nullable=False)
     password = Column(String, nullable=False)
+=======
+    produto = relationship("Produto", back_populates="vendas")
+>>>>>>> 72ab3168a3a45a0ad319296886bd4d9704006cd9
