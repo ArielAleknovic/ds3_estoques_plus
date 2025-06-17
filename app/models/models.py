@@ -1,6 +1,6 @@
 from sqlalchemy import Column, Integer, String, Numeric, Date, ForeignKey
 from sqlalchemy.orm import relationship
-from db import Base
+from utils.db import Base
 from datetime import date
 
 class Fornecedor(Base):
@@ -43,7 +43,6 @@ class Pedido(Base):
     produto = relationship("Produto", back_populates="pedidos")      
     fornecedor = relationship("Fornecedor", back_populates="pedidos")  
 
-
 class Venda(Base):
     __tablename__ = "vendas"
 
@@ -53,3 +52,10 @@ class Venda(Base):
     data_venda = Column(Date, nullable=False)
 
     produto = relationship("Produto", back_populates="vendas")
+
+class Usuario(Base):
+    __tablename__ = "usuarios"
+
+    username = Column(String, primary_key=True)
+    name = Column(String, nullable=False)
+    password = Column(String, nullable=False)

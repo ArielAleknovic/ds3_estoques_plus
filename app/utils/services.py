@@ -5,28 +5,77 @@ import pandas as pd
 from datetime import date, timedelta
 import matplotlib.pyplot as plt
 
-from db import SessionLocal, engine, Base
-from models import Produto, Venda, Pedido, Fornecedor 
+from utils.db import SessionLocal, engine, Base
+from models.models import Produto, Venda, Pedido, Fornecedor, Usuario
+from utils.utils import normalizar_cnpj, validar_cnpj, normalizar_email, validar_email, validar_telefone
+from passlib.context import CryptContext
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 Base.metadata.create_all(bind=engine)
+
+#CRUD de produto
+def get_produtos(db: Session):
+    return db.query(Produto).all()
+
+def criar_produto(db: Session, nome: str, estoque: int, preco: float):
+    produto = Produto(nome=nome, estoque_atual=estoque, preco=preco)
+    db.add(produto)
+    db.commit()
+    db.refresh(produto)
+    return produto
+
+def atualizar_produto(db: Session, produto_id: int, nome: str, estoque: int, preco: float):
+    produto = db.query(Produto).filter(Produto.id == produto_id).first()
+    if produto:
+        produto.nome = nome
+        produto.estoque_atual = estoque
+        produto.preco = preco
+        db.commit()
+        db.refresh(produto)
+        return produto
+    else:
+        raise ValueError("Produto não encontrado.")
+
+def deletar_produto(db: Session, produto_id: int):
+    produto = db.query(Produto).filter(Produto.id == produto_id).first()
+    if produto:
+        db.delete(produto)
+        db.commit()
+    else:
+        raise ValueError("Produto não encontrado.")
 
 # CRUD Fornecedor (sem alterações)
 def get_fornecedores(db: Session):
     return db.query(Fornecedor).all()
 
 def criar_fornecedor(db: Session, nome, cnpj, email, telefone, segmento):
-    fornecedor = Fornecedor(nome=nome, cnpj=cnpj, email=email, telefone=telefone, segmento=segmento)
+    #validação sem rejects
+    if not validar_cnpj(cnpj):
+        raise ValueError("CNPJ inválido") 
+    if email and not validar_email(email):
+        raise ValueError("Email inválido")
+    if telefone and not validar_telefone(telefone):
+        raise ValueError("Telefone inválido")
+
+    fornecedor = Fornecedor(nome=nome, cnpj=normalizar_cnpj(cnpj), email=normalizar_email(email), telefone=telefone, segmento=segmento)
     db.add(fornecedor)
     db.commit()
     db.refresh(fornecedor)
     return fornecedor
 
 def atualizar_fornecedor(db: Session, fornecedor_id, nome, cnpj, email, telefone, segmento):
+        #validação sem rejects
+    if not validar_cnpj(cnpj):
+        raise ValueError("CNPJ inválido") 
+    if email and not validar_email(email):
+        raise ValueError("Email inválido")
+    if telefone and not validar_telefone(telefone):
+        raise ValueError("Telefone inválido")
     fornecedor = db.query(Fornecedor).filter(Fornecedor.id == fornecedor_id).first()
     if fornecedor:
         fornecedor.nome = nome
-        fornecedor.cnpj = cnpj
-        fornecedor.email = email
+        fornecedor.cnpj = normalizar_cnpj(cnpj)
+        fornecedor.email = normalizar_email(email)
         fornecedor.telefone = telefone
         fornecedor.segmento = segmento
         db.commit()
@@ -42,9 +91,6 @@ def deletar_fornecedor(db: Session, fornecedor_id):
     return False
 
 # CRUD Produto, Venda e Pedido
-def get_produtos(db: Session):
-    return db.query(Produto).all()
-
 def get_pedidos(db: Session):
     return db.query(Pedido).all()
 
@@ -90,8 +136,7 @@ def deletar_pedido(db: Session, pedido_id: int):
         return True
     return False
 
-
-
+#CRUD  de login
 def login_tela():
     credentials = get_credentials()
     authenticator = stauth.Authenticate(
@@ -121,5 +166,22 @@ def cadastro_tela():
             st.error("Preencha todos os campos.")
 
 def reset_tela():
+    
     st.subheader("Resetar senha")
     st.warning("Entre em contato com o administrador ou recrie o usuário.")
+
+def criar_usuario(username: str, name: str, password: str) -> bool:
+    novo_usuario = Usuario(username=username, name=name, password=password)
+    with SessionLocal() as db:
+        try:
+            db.add(novo_usuario)
+            db.commit()
+            return True
+        except IntegrityError:
+            db.rollback()
+            return False
+
+def autenticar_usuario(username: str, password: str):
+    with SessionLocal() as db:
+        usuario = db.query(Usuario).filter_by(username=username, password=password).first()
+        return usuario
