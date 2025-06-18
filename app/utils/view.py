@@ -1,99 +1,27 @@
-import streamlit as st
-import pandas as pd
-import matplotlib.pyplot as plt
 from datetime import date, timedelta
-from sqlalchemy import func
+import base64
+
 import streamlit as st
-
-import matplotlib.pyplot as plt
 import pandas as pd
-
+import matplotlib.pyplot as plt
+import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
+from sqlalchemy import func
 from sqlalchemy.orm import Session
-from sqlalchemy import func
-from datetime import date, timedelta
+
 from utils.db import SessionLocal, engine, Base
-from models.models import Produto, Venda, Pedido, Fornecedor, Usuario
+from models.models import *
 from utils.auth import *
 from utils.services import *
 from utils.utils import *
-import streamlit as st
-import base64
 from utils.view import *
 
-# Importações de funções utilitárias ou serviços
-from utils.services import get_produtos, calcular_media_vendas, get_pedidos
-from models.models import Venda  # Certifique-se de que o modelo de Venda está disponível
+from utils.services import *
 
-def exibir_dashboard(db):
-    st.subheader("Visão Geral dos Estoques e Recomendações de Pedido")
-    produtos = get_produtos(db)
-    if produtos:
-        df = pd.DataFrame([{
-            "Produto": p.nome,
-            "Estoque Atual": p.estoque_atual,
-            "Preço (R$)": float(p.preco),
-            "Média diária de vendas (últimos 30 dias)": round(calcular_media_vendas(db, p.id), 2)
-        } for p in produtos])
 
-        st.dataframe(df, use_container_width=True)
+sns.set_theme(style="whitegrid")
 
-        # Sugestão de pedidos
-        sugestoes = []
-        for p in produtos:
-            media = calcular_media_vendas(db, p.id)
-            sugerido = max(0, int(media * 30 - p.estoque_atual))
-            sugestoes.append({"Produto": p.nome, "Quantidade Sugerida": sugerido})
-        df_sugestoes = pd.DataFrame(sugestoes)
-        st.dataframe(df_sugestoes, use_container_width=True)
-
-        # 1. Gráfico de barras: Estoque atual por produto
-        st.markdown("### Estoque Atual por Produto")
-        fig1, ax1 = plt.subplots(figsize=(10, 5))
-        ax1.bar(df['Produto'], df['Estoque Atual'], color='skyblue')
-        ax1.set_ylabel("Estoque Atual")
-        ax1.set_xlabel("Produto")
-        ax1.set_xticklabels(df['Produto'], rotation=45, ha='right')
-        st.pyplot(fig1)
-
-        # 2. Gráfico de linhas: Vendas diárias últimos 30 dias (total)
-        st.markdown("### Vendas Diárias nos Últimos 30 Dias (Total)")
-        data_limite = date.today() - timedelta(days=30)
-        vendas_30d = db.query(Venda.data_venda, func.sum(Venda.quantidade)).filter(
-            Venda.data_venda >= data_limite).group_by(Venda.data_venda).order_by(Venda.data_venda).all()
-        if vendas_30d:
-            df_vendas = pd.DataFrame(vendas_30d, columns=["Data", "Quantidade"])
-            fig2, ax2 = plt.subplots(figsize=(10, 5))
-            ax2.plot(df_vendas["Data"], df_vendas["Quantidade"], marker='o')
-            ax2.set_xlabel("Data")
-            ax2.set_ylabel("Quantidade Vendida")
-            ax2.set_title("Vendas Diárias (Últimos 30 dias)")
-            ax2.grid(True)
-            st.pyplot(fig2)
-        else:
-            st.info("Nenhuma venda nos últimos 30 dias.")
-
-        # 3. Gráfico pizza: Status dos pedidos
-        st.markdown("### Status dos Pedidos")
-        pedidos = get_pedidos(db)
-        if pedidos:
-            status_counts = pd.Series([p.status for p in pedidos]).value_counts()
-            fig3, ax3 = plt.subplots()
-            ax3.pie(status_counts, labels=status_counts.index, autopct='%1.1f%%', startangle=140, colors=['orange', 'green', 'red'])
-            ax3.axis('equal')
-            st.pyplot(fig3)
-        else:
-            st.info("Nenhum pedido registrado.")
-
-        # 4. Gráfico de barras: Quantidade sugerida para pedido
-        st.markdown("### Quantidade Sugerida para Pedido por Produto (próximos 30 dias)")
-        fig4, ax4 = plt.subplots(figsize=(10, 5))
-        ax4.bar(df_sugestoes['Produto'], df_sugestoes['Quantidade Sugerida'], color='lightcoral')
-        ax4.set_ylabel("Quantidade Sugerida")
-        ax4.set_xlabel("Produto")
-        ax4.set_xticklabels(df_sugestoes['Produto'], rotation=45, ha='right')
-        st.pyplot(fig4)
-    else:
-        st.info("Não há produtos cadastrados.")
 
 def home():
     st.title("Bem-vindo ao Sistema de Monitoramento de Estoques")
@@ -176,15 +104,6 @@ def criar_pedido_view(db):
                 criar_pedido(db, produto_obj.id, fornecedor_obj.id, int(quantidade))
                 st.success("Pedido criado com sucesso.")
                 st.rerun()
-def gerar_relatorio(db):
-            st.subheader("Relatórios Resumidos")
-            total_produtos = db.query(func.count(Produto.id)).scalar()
-            total_vendas_30d = sum(v.quantidade for v in get_vendas_ultimos_30_dias(db))
-            total_pedidos = db.query(func.count(Pedido.id)).scalar()
-
-            st.markdown(f"- Total de produtos cadastrados: {total_produtos}")
-            st.markdown(f"- Total de vendas nos últimos 30 dias: {total_vendas_30d} unidades")
-            st.markdown(f"- Total de pedidos realizados: {total_pedidos}")
 
 def criar_fornecedores(db):
             st.subheader("Gestão de fornecedores")
@@ -401,3 +320,150 @@ def login_page():
                         st.success("Usuário cadastrado com sucesso!")
                     else:
                         st.warning("Usuário já existe.")
+
+
+def exibir_dashboard(db):
+    st.subheader("Visão Geral dos Estoques e Recomendações de Pedido")
+    produtos = get_produtos(db)
+
+    if not produtos:
+        st.info("Não há produtos cadastrados.")
+        return
+
+    df = pd.DataFrame([{
+        "Produto": p.nome,
+        "Estoque Atual": p.estoque_atual,
+        "Preço (R$)": float(p.preco),
+        "Média diária de vendas (últimos 30 dias)": round(calcular_media_vendas(db, p.id), 2)
+    } for p in produtos])
+
+    st.dataframe(df, use_container_width=True)
+
+    # Sugestão de pedidos
+    sugestoes = [
+        {"Produto": p.nome, "Quantidade Sugerida": max(0, int(calcular_media_vendas(db, p.id) * 30 - p.estoque_atual))}
+        for p in produtos
+    ]
+    df_sugestoes = pd.DataFrame(sugestoes)
+    st.dataframe(df_sugestoes, use_container_width=True)
+
+    # Estoque Atual com Plotly
+    st.markdown("### Estoque Atual por Produto")
+    fig_estoque = px.bar(df, x='Produto', y='Estoque Atual', color='Produto', title='Estoque Atual por Produto')
+    st.plotly_chart(fig_estoque, use_container_width=True)
+
+    # Vendas Diárias (Últimos 30 dias)
+    st.markdown("### Vendas Diárias nos Últimos 30 Dias")
+    data_limite = date.today() - timedelta(days=30)
+    vendas_30d = db.query(Venda.data_venda, func.sum(Venda.quantidade)).filter(
+        Venda.data_venda >= data_limite
+    ).group_by(Venda.data_venda).order_by(Venda.data_venda).all()
+
+    if vendas_30d:
+        df_vendas = pd.DataFrame(vendas_30d, columns=["Data", "Quantidade"])
+        fig_vendas = px.line(df_vendas, x="Data", y="Quantidade", markers=True, title="Vendas Diárias (Últimos 30 dias)")
+        st.plotly_chart(fig_vendas, use_container_width=True)
+    else:
+        st.info("Nenhuma venda nos últimos 30 dias.")
+
+    # Status dos Pedidos
+    st.markdown("### Status dos Pedidos")
+    pedidos = get_pedidos(db)
+    if pedidos:
+        status_counts = pd.Series([p.status for p in pedidos]).value_counts()
+        fig_status = px.pie(status_counts, values=status_counts.values, names=status_counts.index, title="Status dos Pedidos")
+        st.plotly_chart(fig_status)
+    else:
+        st.info("Nenhum pedido registrado.")
+
+    # Quantidade Sugerida
+    st.markdown("### Quantidade Sugerida para Pedido (30 dias)")
+    fig_sugestoes = px.bar(df_sugestoes, x="Produto", y="Quantidade Sugerida", color="Produto",
+                           title="Sugestão de Reposição")
+    st.plotly_chart(fig_sugestoes, use_container_width=True)
+
+    # Top 5 Produtos mais Vendidos
+    st.markdown("### Top 5 Produtos mais Vendidos (30 dias)")
+    vendas_por_produto = db.query(
+        Produto.nome,
+        func.sum(Venda.quantidade)
+    ).join(Venda).filter(
+        Venda.data_venda >= data_limite
+    ).group_by(Produto.nome).order_by(func.sum(Venda.quantidade).desc()).limit(5).all()
+
+    if vendas_por_produto:
+        df_top5 = pd.DataFrame(vendas_por_produto, columns=["Produto", "Quantidade Vendida"])
+        fig_top5 = px.bar(df_top5, x="Produto", y="Quantidade Vendida", color="Produto", title="Top 5 Produtos Vendidos")
+        st.plotly_chart(fig_top5)
+
+    # Correlação Preço x Estoque
+    st.markdown("### Correlação: Preço x Estoque")
+    fig_corr = px.scatter(df, x="Preço (R$)", y="Estoque Atual", color="Produto", size="Média diária de vendas (últimos 30 dias)",
+                          title="Relação Preço x Estoque x Demanda")
+    st.plotly_chart(fig_corr)
+
+    # Giro de Estoque
+    st.markdown("### Análise de Giro de Estoque")
+    df['Giro Estoque (30 dias)'] = df['Média diária de vendas (últimos 30 dias)'] / df['Estoque Atual'].replace(0, 1)
+    df_sorted = df.sort_values(by='Giro Estoque (30 dias)', ascending=False)
+    st.dataframe(df_sorted)
+
+    # Relatório de Vendas por Produto, Período e Fornecedor
+    st.markdown("### Relatório de Vendas Personalizado")
+    produtos_opcoes = [p.nome for p in produtos]
+    produto_selecionado = st.selectbox("Produto:", ["Todos"] + produtos_opcoes)
+    fornecedores_opcoes = list({f.nome for f in get_fornecedores(db)})
+    fornecedor_selecionado = st.selectbox("Fornecedor:", ["Todos"] + fornecedores_opcoes)
+    data_ini = st.date_input("Data inicial", value=date.today() - timedelta(days=30))
+    data_fim = st.date_input("Data final", value=date.today())
+
+    query = db.query(Produto.nome.label("Produto"), Venda.data_venda.label("Data"), Venda.quantidade.label("Quantidade"),
+                     Fornecedor.nome.label("Fornecedor")).join(Venda).join(Fornecedor)
+    query = query.filter(Venda.data_venda.between(data_ini, data_fim))
+    if produto_selecionado != "Todos":
+        query = query.filter(Produto.nome == produto_selecionado)
+    if fornecedor_selecionado != "Todos":
+        query = query.filter(Fornecedor.nome == fornecedor_selecionado)
+
+    df_relatorio = pd.read_sql(query.statement, db.bind)
+    st.dataframe(df_relatorio)
+
+    from sklearn.linear_model import LinearRegression
+    import numpy as np
+    import plotly.graph_objects as go
+
+    # --- Vendas completas (últimos 30 dias) ---
+    data_limite = date.today() - timedelta(days=30)
+    vendas = db.query(Venda.data_venda, Produto.nome, func.sum(Venda.quantidade)).join(Produto).filter(
+        Venda.data_venda >= data_limite
+    ).group_by(Venda.data_venda, Produto.nome).order_by(Venda.data_venda).all()
+
+    if vendas:
+        df_sim = pd.DataFrame(vendas, columns=["Data", "Produto", "Quantidade"])
+        df_sim["Data"] = pd.to_datetime(df_sim["Data"])
+
+        produto_selecionado = st.selectbox("Selecione o produto para simulação de demanda:", df_sim["Produto"].unique())
+
+        df_item = df_sim[df_sim["Produto"] == produto_selecionado].copy()
+        df_item = df_item.set_index("Data").resample("D").sum().fillna(0)
+        df_item.reset_index(inplace=True)
+
+        # Média móvel
+        df_item["MediaMovel_7d"] = df_item["Quantidade"].rolling(window=7, min_periods=1).mean()
+
+        # Regressão linear
+        df_item["Dias"] = (df_item["Data"] - df_item["Data"].min()).dt.days
+        X = df_item[["Dias"]]
+        y = df_item["Quantidade"]
+        modelo = LinearRegression().fit(X, y)
+        df_item["Previsao_Linear"] = modelo.predict(X)
+
+        # Gráfico interativo
+        fig_sim = go.Figure()
+        fig_sim.add_trace(go.Scatter(x=df_item["Data"], y=df_item["Quantidade"], name="Real", mode="lines+markers"))
+        fig_sim.add_trace(go.Scatter(x=df_item["Data"], y=df_item["MediaMovel_7d"], name="Média Móvel 7d"))
+        fig_sim.add_trace(go.Scatter(x=df_item["Data"], y=df_item["Previsao_Linear"], name="Tendência das vendas"))
+        fig_sim.update_layout(title=f"Simulação de Demanda Futura - {produto_selecionado}")
+        st.plotly_chart(fig_sim, use_container_width=True)
+    else:
+        st.info("Não há dados suficientes para simulação.")

@@ -1,6 +1,4 @@
 import streamlit as st
-st.set_page_config(page_title="Sistema de Monitoramento de Estoques", layout="wide")
-
 from utils.db import SessionLocal, engine, Base
 from models.models import Produto, Venda, Pedido, Fornecedor, Usuario
 from utils.auth import *
@@ -8,6 +6,8 @@ from utils.services import *
 from utils.utils import *
 from utils.view import *
 from utils.styles import styles
+
+st.set_page_config(page_title="Sistema de Monitoramento de Estoques", layout="wide")
 
 Base.metadata.create_all(bind=engine)
 
@@ -33,24 +33,21 @@ def main():
             "Criar Fornecedor", "Fornecedores", "Criar Produtos", "Produtos"
         ])
 
-        if menu == "Home":
-            home()
-        elif menu == "Dashboard":
-            exibir_dashboard(db)
-        elif menu == "Pedidos":
-            exibir_pedidos(db)
-        elif menu == "Criar Pedido":
-            criar_pedido_view(db)
-        elif menu == "Relatórios":
-            gerar_relatorio(db)
-        elif menu == "Criar Fornecedor":
-            criar_fornecedores(db)
-        elif menu == "Fornecedores":
-            fornecedores(db)
-        elif menu == "Produtos":
-            produtos(db)
-        elif menu == "Criar Produtos":
-            criar_produtos(db)
+        opcoes = {
+            "Home": home,
+            "Dashboard": lambda: exibir_dashboard(db),
+            "Pedidos": lambda: exibir_pedidos(db),
+            "Criar Pedido": lambda: criar_pedido_view(db),
+            "Criar Fornecedor": lambda: criar_fornecedores(db),
+            "Fornecedores": lambda: fornecedores(db),
+            "Produtos": lambda: produtos(db),
+            "Criar Produtos": lambda: criar_produtos(db),
+        }
+
+        if menu in opcoes:
+            opcoes[menu]()
+        else:
+            st.warning("Opção inválida.")
 
 if __name__ == "__main__":
     main()

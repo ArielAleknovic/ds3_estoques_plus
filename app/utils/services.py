@@ -185,3 +185,5 @@ def autenticar_usuario(username: str, password: str):
     with SessionLocal() as db:
         usuario = db.query(Usuario).filter_by(username=username, password=password).first()
         return usuario
+    
+
