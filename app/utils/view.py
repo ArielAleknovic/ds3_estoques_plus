@@ -24,12 +24,35 @@ sns.set_theme(style="whitegrid")
 
 
 def home():
-    st.title("Bem-vindo ao Sistema de Monitoramento de Estoques")
-    st.markdown("Este sistema permite acompanhar estoques, vendas, pedidos e fornecedores de forma simples e eficiente.")
+    st.title("Sistema de Monitoramento de Estoques")
+    st.markdown("""
+    Bem-vindo ao painel principal do sistema.  
+    Este sistema foi desenvolvido para auxiliar no **gerenciamento de materiais**, com foco em controle de **estoque**, **vendas**, **pedidos de compra** e **cadastro de fornecedores**.
+    """)
 
-    if st.button("Logout"):
-                st.session_state.usuario = None
-                st.rerun()  # força atualização da página para voltar ao login
+    st.markdown("---")
+
+    st.subheader("Funcionalidades Disponíveis")
+    st.markdown("""
+    - **Dashboard Analítico:** Visualize indicadores importantes, como giro de estoque, vendas por produto e sugestões de reposição.
+    - **Gestão de Produtos:** Cadastre, edite e acompanhe os produtos e seus níveis de estoque em tempo real.
+    - **Pedidos de Compra:** Solicite reposições diretamente aos fornecedores e acompanhe o status dos pedidos.
+    - **Cadastro de Fornecedores:** Mantenha as informações organizadas e acessíveis para futuras negociações e compras.
+    """)
+
+    st.markdown("---")
+
+    st.subheader("Objetivo do Sistema")
+    st.markdown("""
+    O principal objetivo é fornecer uma visão clara e objetiva sobre os materiais disponíveis e suas movimentações,
+    permitindo uma gestão mais eficiente e estratégica dos recursos.
+    """)
+
+    st.markdown("---")
+
+    if st.button("Encerrar Sessão"):
+        st.session_state.usuario = None
+        st.rerun()
 
 def exibir_pedidos(db):
     st.subheader("Lista de Pedidos")

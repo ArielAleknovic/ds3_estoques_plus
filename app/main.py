@@ -29,7 +29,7 @@ def main():
 
     with SessionLocal() as db:
         menu = st.sidebar.radio("Navegação", [
-            "Home", "Dashboard", "Pedidos", "Criar Pedido", "Relatórios",
+            "Home", "Dashboard", "Pedidos", "Criar Pedido", 
             "Criar Fornecedor", "Fornecedores", "Criar Produtos", "Produtos"
         ])
 
